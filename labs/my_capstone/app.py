@@ -121,7 +121,7 @@ def create_app(workdir: Path | None = None, use_mcp: bool = True, shape="chat") 
     audit_path, trace_path = workdir / "audit.jsonl", workdir / "traces.jsonl"
     config = rafeeq.CONFIGS[CONFIG]
     lock = threading.Lock()  # one agent run or tool execution at a time: K.LEDGER is process-wide (fine for a lab)
-    state: dict = {"bridge": None}
+    state: dict = {"bridge": None, "started": iso(time.time())}
 
     @contextmanager
     def conn():
@@ -146,6 +146,7 @@ def create_app(workdir: Path | None = None, use_mcp: bool = True, shape="chat") 
         stale = con.execute("UPDATE pending SET status = 'expired' WHERE status IN ('pending', 'deciding')").rowcount
     if stale:
         log(audit_path, "pending_expired_on_start", count=stale)
+        print(f"rafeeq: database reset at start; {stale} pending action(s) from the previous run expired", file=sys.stderr)
 
     def view(row: sqlite3.Row) -> PendingOut:
         result = json.loads(row["result"]) if row["result"] else None
@@ -182,7 +183,10 @@ def create_app(workdir: Path | None = None, use_mcp: bool = True, shape="chat") 
     # -------------------------------------------------------------- routes
     @app.get("/healthz")
     def healthz() -> dict:
-        return {"ok": True, "model": K.MODEL, "config": CONFIG, "mcp": bool(state["bridge"])}
+        with conn() as con:
+            counts = {r["status"]: r["n"] for r in con.execute("SELECT status, count(*) AS n FROM pending GROUP BY status")}
+        return {"ok": True, "model": K.MODEL, "config": CONFIG, "mcp": bool(state["bridge"]), "started": state["started"],
+                "workdir": str(workdir), "pending_by_status": counts}
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
@@ -278,7 +282,8 @@ def create_app(workdir: Path | None = None, use_mcp: bool = True, shape="chat") 
         if not row:
             raise HTTPException(404, f"No pending action {pid}")
         if not claimed:
-            raise HTTPException(409, f"Action {pid} is already {row['status']}")
+            note = " (the demo database resets when the server starts, so older requests expire)" if row["status"] == "expired" else ""
+            raise HTTPException(409, f"Action {pid} is already {row['status']}{note}")
         name, args = row["tool"], json.loads(row["args"])
         result: dict | None = None
         if body.decision == "reject":
