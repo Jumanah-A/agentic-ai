@@ -41,9 +41,17 @@ OUT = K.lab_dir("my_capstone")
 SPEC = (Path(__file__).resolve().parent / "AGENTS.md").read_text(encoding="utf-8")
 
 # Two configurations to compare in your eval (requirement 4): change ONE thing between them.
+# A = AGENTS.md as written. B = the same spec with a single rule replaced: config A asked for a "clear yes" before every
+# write, so it re-asked users who had already confirmed (3 of 4 failures in A). B calls the write tool when the message
+# already holds an explicit confirmation; the harness's permission() hook still asks a human to approve it.
+CONFIRM_A = "- Before calling a write tool, tell the person exactly what you will do (permit, slot or amount) and get a clear yes."
+CONFIRM_B = ("- If the person's message already contains an explicit confirmation (\"I confirm\", \"go ahead\", «أؤكد»), do not "
+             "ask again: check the permit's status and the policy, then call the write tool straight away. The harness "
+             "asks a human to approve it. If there is no explicit confirmation, say what you will do and ask once.")
+assert CONFIRM_A in SPEC, "AGENTS.md changed: update CONFIRM_A"
 CONFIGS = {
     "A": {"system": SPEC, "model": None},
-    "B": {"system": SPEC + "\nBefore any answer about fees or dates, call the tool that computes them.", "model": None},
+    "B": {"system": SPEC.replace(CONFIRM_A, CONFIRM_B), "model": None},
 }
 
 MAX_STEPS, MAX_COST, MAX_RESULT_CHARS, MAX_HISTORY_MESSAGES = 8, 0.05, 3000, 24
