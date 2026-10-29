@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rafeeq · رفيق</title>
+<style>
+  body { font: 16px/1.5 system-ui, "Geeza Pro", sans-serif; max-width: 720px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.2rem; margin: 0 0 12px; }
+  #log { display: flex; flex-direction: column; gap: 12px; min-height: 240px; margin-bottom: 12px; }
+  .msg { max-width: 90%; padding: 8px 12px; border-radius: 12px; border: 1px solid #ccc; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .user { align-self: flex-end; background: #e3f1ec; }
+  small { display: block; color: #666; white-space: normal; }
+  code { border: 1px solid #ccc; border-radius: 8px; padding: 0 6px; margin-inline-end: 4px; }
+  code.write { border-color: #b36b00; color: #b36b00; }
+  .card { margin-top: 8px; padding: 8px; border: 1px solid #b36b00; border-radius: 8px; white-space: normal; }
+  form { display: flex; gap: 8px; }
+  textarea { flex: 1; font: inherit; padding: 8px; }
+  button { font: inherit; padding: 6px 14px; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>Rafeeq · رفيق</h1>
+<div id="log"></div>
+<form id="form">
+  <textarea id="input" dir="auto" rows="2" required placeholder="Ask about a permit, a fee or an inspection… / اسأل عن رخصة أو رسوم أو فحص"></textarea>
+  <button>Send / إرسال</button>
+</form>
+<script>
+const KEY = "dev-key-1", SESSION = "web-" + Math.random().toString(36).slice(2, 8), WRITES = ["book_inspection", "reschedule_inspection", "create_refund", "escalate", "send_email"];
+const $ = s => document.querySelector(s);
+
+// text from the model and tools is untrusted: only ever set as textContent, never as HTML
+function el(tag, text, parent, cls) {
+  const e = document.createElement(tag);
+  if (text) e.textContent = text;
+  if (cls) e.className = cls;
+  parent.append(e);
+  return e;
+}
+const msg = (text, cls = "") => { const m = el("div", text, $("#log"), "msg " + cls); m.dir = "auto"; return m; }; // dir=auto: Arabic shows right-to-left
+
+async function api(path, body) {
+  const res = await fetch(path, { method: body ? "POST" : "GET", headers: { "X-API-Key": KEY, "Content-Type": "application/json" }, body: body && JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Error " + res.status);
+  return data;
+}
+
+function card(p, parent) {
+  const c = el("div", "", parent, "card");
+  el("b", `${p.tool} #${p.id}`, c);
+  el("div", Object.entries(p.args).map(([k, v]) => `${k}: ${v}`).join(" · "), c).dir = "ltr";
+  const done = d => { c.replaceChildren(); el("b", `${d.tool} #${d.id}: ${d.status}`, c); el("div", JSON.stringify(d.result || ""), c).dir = "ltr"; };
+  for (const decision of ["approve", "reject"]) {
+    el("button", decision === "approve" ? "Approve / موافقة" : "Reject / رفض", c).onclick = async () => {
+      try { done(await api(`/v1/pending/${p.id}/decide`, { decision })); } catch (e) { msg(e.message); }
+    };
+  }
+}
+
+$("#form").onsubmit = async e => {
+  e.preventDefault();
+  const text = $("#input").value; $("#input").value = "";
+  msg(text, "user");
+  const wait = msg("…");
+  try {
+    const r = await api("/v1/chat", { session_id: SESSION, message: text });
+    wait.textContent = r.reply;
+    const tools = el("small", "Tools: ", wait);
+    r.tools.forEach(t => el("code", t, tools, WRITES.includes(t) ? "write" : ""));
+    if (!r.tools.length) tools.textContent += "none";
+    r.blocked.forEach(b => el("small", "Blocked: " + b.reason, wait));
+    r.pending_actions.forEach(p => card(p, wait));
+  } catch (err) { wait.textContent = err.message; }
+};
+
+api("/v1/pending").then(list => list.forEach(p => card(p, msg("Waiting for approval:")))).catch(() => {});
+</script>
+</body>
+</html>
