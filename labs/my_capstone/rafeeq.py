@@ -113,6 +113,8 @@ def main() -> int:
     e.add_argument("tasks", type=Path)
     e.add_argument("--config", nargs="+", default=["A", "B"])
     e.add_argument("--trials", type=int, default=1)
+    e.add_argument("--ids", nargs="+", help="run only these task ids")
+    e.add_argument("--out", type=Path, default=OUT / "eval.csv", help="where to write the per-task CSV")
     args = ap.parse_args()
 
     with K.MCPBridge(mcp_server()) as mcp:
@@ -130,16 +132,16 @@ def main() -> int:
                 history = run.state[1:]
                 path.write_text(json.dumps(history, ensure_ascii=False, default=str), encoding="utf-8")
         else:
-            tasks = evals.load_tasks(args.tasks)
+            tasks = evals.load_tasks(args.tasks, ids=args.ids)
             consent = lambda name, a: True  # noqa: E731 - unattended: task prompts give consent; db graders check writes
             frames = [evals.run_suite(make_agent(CONFIGS[c], mcp, approve=consent), tasks, trials=args.trials, name=c)
                       for c in args.config]
             import pandas as pd
 
             df = pd.concat(frames)
-            df.drop(columns="final").to_csv(OUT / "eval.csv", index=False)
+            df.to_csv(args.out, index=False)  # keeps the `final` reply: error analysis needs to read it
             overall, per_task = evals.report(df)
-            print("\n", overall, "\n\nper task written to", OUT / "eval.csv")
+            print("\n", overall, "\n\nper task written to", args.out)
     return 0
 
 
