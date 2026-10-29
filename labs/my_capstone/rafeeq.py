@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -195,6 +196,8 @@ def main() -> int:
     x.add_argument("--tasks", type=Path, default=Path(__file__).resolve().parent / "tasks.jsonl")
     x.add_argument("--config", choices=list(CONFIGS), default="B")
     args = ap.parse_args()
+    if K.PROVIDER == "openrouter" and not os.getenv("OPENROUTER_API_KEY"):
+        sys.exit("No API key. Copy labs/.env.example to labs/.env and set OPENROUTER_API_KEY (a free OpenRouter key).")
 
     with K.MCPBridge(mcp_server()) as mcp:
         if args.cmd == "ask":

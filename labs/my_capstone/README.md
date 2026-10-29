@@ -13,7 +13,7 @@ Applicants ask the same questions again and again: what is the fee, where is my 
 
 ## How to run
 
-All commands run from `labs/`, need an OpenRouter key in `labs/.env` (`OPENROUTER_API_KEY=...`, never committed), and use `uv` (dependencies are declared in each file, PEP 723).
+All commands run from `labs/` and use `uv` (dependencies are declared in each file, PEP 723). The agent and the eval need an OpenRouter key: copy `labs/.env.example` to `labs/.env` and set `OPENROUTER_API_KEY` (never committed). `tests.py` and the page itself need no key.
 
 ```bash
 uv run my_capstone/rafeeq.py ask "What is the fee for an illuminated 3 m² sign?"
