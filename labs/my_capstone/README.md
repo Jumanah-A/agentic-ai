@@ -23,6 +23,17 @@ uv run my_capstone/app.py --port 8793               # service + chat page at htt
 uv run my_capstone/tests.py                         # offline checks, no API key needed
 ```
 
+## Try the chat page
+
+1. Start the service from `labs/` (it needs the key from `labs/.env`):
+   ```bash
+   uv run my_capstone/app.py --port 8793
+   ```
+2. Open **http://127.0.0.1:8793/** in a browser. The page is `index.html`, served by `app.py`.
+3. Ask a question in English or Arabic, for example *What is the fee for an illuminated 3 m² sign?* Under each reply the page lists the tools that were used.
+4. Ask for a change: *My food truck permit FTR-30311 is approved. Please book my health inspection on Thursday 5 November at 10:00. I confirm, go ahead. National ID ends 6654, mobile 0532236654.* Rafeeq does not book it. A card appears with **Approve** and **Reject** buttons. Approve runs the booking, Reject does nothing, and both are logged. Ask a follow-up (*what is the status of FTR-30311?*) to see the booking.
+5. Without a key, steps 1–2 still work and the page shows a message asking for the key. `uv run my_capstone/tests.py` checks the approval flow with no key at all.
+
 | File | What it is |
 |---|---|
 | `AGENTS.md` | Rafeeq's spec (system prompt) |
