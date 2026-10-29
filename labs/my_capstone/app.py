@@ -22,7 +22,7 @@ What it adds around rafeeq.py's agent (same spec, tools and guard):
   approved, so a stale or tampered queue row cannot send mail either;
 - one shared database: the MCP server and the write tools use the same file, so a booking you approve shows up in the
   next get_permit;
-- an audit log without personal data (mobile numbers are masked) and one trace line per chat turn.
+- an audit log without personal data (mobile numbers masked, email bodies reduced to their length) and one trace line per chat turn.
 """
 
 from __future__ import annotations
@@ -223,7 +223,7 @@ def create_app(workdir: Path | None = None, use_mcp: bool = True, shape="chat") 
                 pid = con.execute("INSERT INTO pending (session_id, owner, tool, args, status, created) VALUES (?,?,?,?,?,?)",
                                   (req.session_id, who(key), name, json.dumps(args, ensure_ascii=False), "pending", time.time())).lastrowid
             queued.append(pid)
-            log(audit_path, "pending_created", id=pid, session=req.session_id, tool=name, args=masked(args))
+            log(audit_path, "pending_created", id=pid, session=req.session_id, tool=name, args=rafeeq.log_safe(args))
             return json.dumps({"status": "pending_approval", "pending_id": pid,
                                "note": "NOT done yet. It is queued for a human approval. Tell the person it is waiting for approval."})
 
@@ -241,7 +241,7 @@ def create_app(workdir: Path | None = None, use_mcp: bool = True, shape="chat") 
                 try:
                     run = K.run_agent(req.message, tools, model=SECOND_MODEL, **kw)
                 except Exception as e2:  # noqa: BLE001
-                    raise HTTPException(503, f"The model is unavailable ({type(e2).__name__}). Try again shortly.") from e2
+                    raise HTTPException(503, f"The model is unavailable: {str(e2)[:200] or type(e2).__name__}") from e2
             used = {"input": K.LEDGER.input_tokens - before[0], "output": K.LEDGER.output_tokens - before[1]}
         reply = run.final or "I couldn't finish this request. An officer will follow up."
         with conn() as con:
@@ -303,7 +303,7 @@ def create_app(workdir: Path | None = None, use_mcp: bool = True, shape="chat") 
             con.execute("UPDATE pending SET status = ?, decided_at = ?, decided_by = ?, reason = ?, result = ? WHERE id = ?",
                         (status, time.time(), by, body.reason, json.dumps(result, ensure_ascii=False) if result else None, pid))
             row = con.execute("SELECT * FROM pending WHERE id = ?", (pid,)).fetchone()
-        log(audit_path, "decision", id=pid, decision=body.decision, status=status, tool=name, args=masked(args), by=by,
+        log(audit_path, "decision", id=pid, decision=body.decision, status=status, tool=name, args=rafeeq.log_safe(args), by=by,
             reason=body.reason, result=result)
         return view(row)
 

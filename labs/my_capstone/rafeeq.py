@@ -2,20 +2,20 @@
 # requires-python = ">=3.11"
 # dependencies = ["openai>=3.30", "pydantic>=2.12", "python-dotenv>=1.1", "pandas>=2.2", "mcp>=2.3"]
 # ///
-"""Capstone starter: one agent that already meets the minimum requirements' plumbing. Make it yours.
+"""Rafeeq, the Madar Municipal Services assistant: the agent, its harness controls, the eval runner and the attack demo.
 
     uv run my_capstone/rafeeq.py ask "What is the fee for an illuminated 3 m² sign?"
     uv run my_capstone/rafeeq.py chat --session me              # a conversation, kept in artifacts/my_capstone/
     uv run my_capstone/rafeeq.py eval my_capstone/tasks.jsonl --config A B
     uv run my_capstone/rafeeq.py attack --guard off             # security demo: the injection, then --guard on
 
-What is wired in (each one maps to a capstone requirement; search for "CAPSTONE:" to find where to change it):
-1. tools: local Python functions plus the tools of an MCP server (default: servers/madar_mcp.py over stdio);
-2. context: a spec file as the system prompt (AGENTS.md style), a session history with a compaction rule, and a cap
-   on tool-result size;
-3. harness: a permission policy (read → allow, write → ask a human), step and cost budgets, an audit log;
-4. evals: the Day 3 eval runner over your tasks, on two configurations, with a per-task CSV for error analysis.
-Security (requirement 5): egress_blocked() is the egress guard, enforced in permission() (code, not prompt).
+What is wired in:
+1. tools: Madar's write tools as local Python functions, plus the read tools of an MCP server (servers/madar_mcp.py, stdio);
+2. context: AGENTS.md as the system prompt, a session history with a compaction rule, a cap on tool-result size;
+3. harness: a permission policy (reads run, writes ask a human), an egress guard for send_email, step and cost budgets,
+   an audit log without personal data;
+4. evals: the course eval runner over tasks.jsonl on two configurations, saved after every task, with the replies kept.
+Config B is the better one and the default for ask and chat; A is the baseline of the evaluation.
 
 Run from labs/ (it imports agentkit, madar and evals from there).
 """
@@ -58,10 +58,10 @@ def with_retry(call, tries: int = 6):
 _chat = K.chat  # every model call (the agent's and the eval judge's) goes through K.chat; wrap it for this process only
 K.chat = lambda *a, **kw: with_retry(lambda: _chat(*a, **kw))
 
-# ---------------------------------------------------------------- CAPSTONE: your agent's spec (system prompt)
+# ---------------------------------------------------------------- spec: the system prompt
 SPEC = (Path(__file__).resolve().parent / "AGENTS.md").read_text(encoding="utf-8")
 
-# Two configurations to compare in your eval (requirement 4): change ONE thing between them.
+# Two configurations for the eval: they differ in ONE rule.
 # A = AGENTS.md as written. B = the same spec with a single rule replaced: config A asked for a "clear yes" before every
 # write, so it re-asked users who had already confirmed (3 of 4 failures in A). B calls the write tool when the message
 # already holds an explicit confirmation; the harness's permission() hook still asks a human to approve it.
@@ -78,22 +78,21 @@ CONFIGS = {
 MAX_STEPS, MAX_COST, MAX_RESULT_CHARS, MAX_HISTORY_MESSAGES = 8, 0.05, 3000, 24
 
 
-# ---------------------------------------------------------------- CAPSTONE: tools
+# ---------------------------------------------------------------- tools
 def local_tools(m: madar.Madar) -> list:
-    """Tools that live in this process (here: Madar's write tools; the read tools come over MCP). Replace them with
-    your domain's functions: typed, with Google-style docstrings, names that don't clash with the MCP tools."""
+    """Tools that live in this process: Madar's write tools (the read tools come over MCP)."""
     return [m.book_inspection, m.reschedule_inspection, m.create_refund, m.escalate, m.send_email]
 
 
 def mcp_server() -> StdioServerParameters:
-    """The MCP server whose tools the agent also gets (requirement 1). Point it at your own server."""
+    """The MCP server whose tools the agent also gets: Madar's read tools."""
     return StdioServerParameters(command="uv", args=["run", "--quiet", str(LABS / "servers" / "madar_mcp.py")])
 
 
 WRITE_TOOLS = {"book_inspection", "reschedule_inspection", "create_refund", "escalate", "send_email"}
 
 
-# ---------------------------------------------------------------- CAPSTONE: harness controls
+# ---------------------------------------------------------------- harness controls
 ALLOWED_EMAIL_DOMAIN = "madar.gov"
 EGRESS_GUARD = True  # only the `attack --guard off` demo turns this off; evals and the service always run with it on
 ONE_ADDRESS = re.compile(r"[^@\s,;<>()\"']+@([A-Za-z0-9.-]+)")
@@ -112,11 +111,17 @@ def egress_blocked(name: str, args: dict) -> str | None:
     return f"egress guard: send_email to {to!r} refused (only one @{ALLOWED_EMAIL_DOMAIN} address is allowed)"
 
 
+def log_safe(args: dict) -> dict:
+    """Data minimisation for logs: a mobile number only by its last 4 digits, an email body only by its length."""
+    return {k: ("******" + re.sub(r"\D", "", str(v))[-4:] if k == "mobile" else f"[{len(str(v))} chars]" if k == "body" else v)
+            for k, v in args.items()}
+
+
 def permission(name: str, args: dict) -> str:
     """Decides before any human is asked, so a blocked call is denied even if someone would click Approve."""
     if EGRESS_GUARD and (reason := egress_blocked(name, args)):
         with (OUT / "audit.jsonl").open("a", encoding="utf-8") as f:
-            f.write(json.dumps({"tool": name, "args": args, "blocked": reason}, ensure_ascii=False) + "\n")
+            f.write(json.dumps({"tool": name, "args": log_safe(args), "blocked": reason}, ensure_ascii=False) + "\n")
         return "deny"
     return "ask" if name in WRITE_TOOLS else "allow"
 
@@ -139,7 +144,7 @@ def cap_result(name: str, args: dict, result: str) -> str | None:
         marker = "replace two load-bearing walls in the kitchen"
         result = result.replace(marker, marker + POISON_NOTE)
     with (OUT / "audit.jsonl").open("a", encoding="utf-8") as f:
-        f.write(json.dumps({"tool": name, "args": args, "chars": len(result)}, ensure_ascii=False) + "\n")
+        f.write(json.dumps({"tool": name, "args": log_safe(args), "chars": len(result)}, ensure_ascii=False) + "\n")
     if len(result) > MAX_RESULT_CHARS:
         return result[:MAX_RESULT_CHARS] + f"\n[… {len(result) - MAX_RESULT_CHARS} characters cut; ask for less]"
     return result if POISON_NOTE and name == "get_permit" else None
@@ -171,8 +176,10 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("ask")
     a.add_argument("question")
+    a.add_argument("--config", choices=list(CONFIGS), default="B")
     c = sub.add_parser("chat")
     c.add_argument("--session", default="default")
+    c.add_argument("--config", choices=list(CONFIGS), default="B")
     e = sub.add_parser("eval")
     e.add_argument("tasks", type=Path)
     e.add_argument("--config", nargs="+", default=["A", "B"])
@@ -191,7 +198,7 @@ def main() -> int:
 
     with K.MCPBridge(mcp_server()) as mcp:
         if args.cmd == "ask":
-            run = make_agent(CONFIGS["A"], mcp)(args.question, madar.Madar(OUT / "db"), verbose=True)
+            run = make_agent(CONFIGS[args.config], mcp)(args.question, madar.Madar(OUT / "db"), verbose=True)
             print("\n" + (run.final or f"(stopped: {run.stopped})"))
         elif args.cmd == "attack":
             EGRESS_GUARD = args.guard == "on"
@@ -212,7 +219,7 @@ def main() -> int:
         elif args.cmd == "chat":
             path = OUT / f"session-{args.session}.json"
             history = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
-            m, agent = madar.Madar(OUT / "db"), make_agent(CONFIGS["A"], mcp)
+            m, agent = madar.Madar(OUT / "db"), make_agent(CONFIGS[args.config], mcp)
             print("Type your message (empty line to quit).")
             while (msg := input("\n🧑 ").strip()):
                 run = agent(msg, m, history=compact(history))
