@@ -26,6 +26,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 LABS = Path(__file__).resolve().parents[1]
@@ -34,10 +35,28 @@ sys.path.insert(0, str(LABS))
 from mcp import StdioServerParameters  # noqa: E402
 
 import agentkit as K  # noqa: E402
+import openai  # noqa: E402
 import evals  # noqa: E402
 import madar  # noqa: E402
 
 OUT = K.lab_dir("my_capstone")
+
+
+def with_retry(call, tries: int = 6):
+    """Free models answer HTTP 429 now and then. Wait and retry, so a rate limit is not recorded as a failed task."""
+    for i in range(tries):
+        try:
+            return call()
+        except openai.RateLimitError:
+            if i == tries - 1:
+                raise
+            wait = min(10 * 2**i, 90)
+            print(f"   (rate limited, waiting {wait}s)", file=sys.stderr, flush=True)
+            time.sleep(wait)
+
+
+_chat = K.chat  # every model call (the agent's and the eval judge's) goes through K.chat; wrap it for this process only
+K.chat = lambda *a, **kw: with_retry(lambda: _chat(*a, **kw))
 
 # ---------------------------------------------------------------- CAPSTONE: your agent's spec (system prompt)
 SPEC = (Path(__file__).resolve().parent / "AGENTS.md").read_text(encoding="utf-8")
@@ -160,6 +179,7 @@ def main() -> int:
     e.add_argument("--trials", type=int, default=1)
     e.add_argument("--ids", nargs="+", help="run only these task ids")
     e.add_argument("--out", type=Path, default=OUT / "eval.csv", help="where to write the per-task CSV")
+    e.add_argument("--resume", action="store_true", help="keep finished tasks already in --out, re-run the rest (and errored ones)")
     x = sub.add_parser("attack", help="security demo: run an injection task with the egress guard on or off")
     x.add_argument("--guard", choices=["on", "off"], default="on")
     x.add_argument("--vector", choices=["email", "permit"], default="permit",
@@ -202,12 +222,22 @@ def main() -> int:
         else:
             tasks = evals.load_tasks(args.tasks, ids=args.ids)
             consent = lambda name, a: True  # noqa: E731 - unattended: task prompts give consent; db graders check writes
-            frames = [evals.run_suite(make_agent(CONFIGS[c], mcp, approve=consent), tasks, trials=args.trials, name=c)
-                      for c in args.config]
             import pandas as pd
 
+            frames, done = [], set()
+            if args.resume and args.out.exists():
+                old = pd.read_csv(args.out)
+                errored = old.failed_graders.fillna("").str.match(r"^\w*(Error|stopped)")  # a crash or a budget stop, not a wrong answer
+                bad = set(zip(old[errored].agent, old[errored].id))
+                old = old[[(a, i) not in bad for a, i in zip(old.agent, old.id)]]
+                frames, done = [old], set(zip(old.agent, old.id))
+            for c in args.config:
+                agent = make_agent(CONFIGS[c], mcp, approve=consent)
+                for task in tasks:  # one task at a time, saving after each: a crash loses at most the task in progress
+                    if (c, task["id"]) not in done:
+                        frames.append(evals.run_suite(agent, [task], trials=args.trials, name=c))
+                        pd.concat(frames).to_csv(args.out, index=False)  # keeps the `final` reply: error analysis needs it
             df = pd.concat(frames)
-            df.to_csv(args.out, index=False)  # keeps the `final` reply: error analysis needs to read it
             overall, per_task = evals.report(df)
             print("\n", overall, "\n\nper task written to", args.out)
     return 0
