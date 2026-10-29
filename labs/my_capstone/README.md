@@ -129,4 +129,3 @@ Every failed trial (A: 20, B: 11) was classified by a script from the CSV (the r
 - Any chat key can approve unless `RAFEEQ_OFFICER_KEYS` is set; a real service needs officer identity, not just a key, and approval timeouts.
 - Policy search is keyword matching, and the model sometimes answers "I don't have that information" without searching at all (`rules-olaya-truck-zone`, 6 of 6 trials in the final run).
 - `compute_fee` is only as good as the model's choice of arguments; the db and fee graders catch wrong values, not wrong tool choices in new situations.
-- Not done: slides (separate), a second model for the judge, rate limiting per client, tracing beyond one log line per turn.
