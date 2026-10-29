@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rafeeq · Madar Municipal Services</title>
+<style>
+  :root {
+    --bg: #f6f7f5; --surface: #ffffff; --ink: #1d2623; --muted: #5d6b66; --line: #dde3e0;
+    --accent: #0f6b57; --accent-ink: #ffffff; --user: #e3f1ec; --warn-bg: #fff4e0; --warn-ink: #7a4a00;
+    --bad-bg: #fde8e8; --bad-ink: #8a1c1c; --good-bg: #e3f4e8; --good-ink: #1b5e32; --write: #8a5a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121715; --surface: #1b2220; --ink: #e8eeeb; --muted: #9fb0aa; --line: #2c3834;
+      --accent: #3fb596; --accent-ink: #08201a; --user: #1f3a32; --warn-bg: #3a2c10; --warn-ink: #f0c36a;
+      --bad-bg: #3d1d1d; --bad-ink: #f2a1a1; --good-bg: #17331f; --good-ink: #8fd6a4; --write: #e0b45a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Naskh Arabic", "Geeza Pro", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 1.2rem; }
+  header .sub { color: var(--muted); font-size: .9rem; }
+  header .spacer { flex: 1; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  .btn { min-height: 40px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+  .btn:hover { border-color: var(--accent); }
+  .btn:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .btn.danger { color: var(--bad-ink); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  details.settings summary { cursor: pointer; list-style: none; }
+  details.settings summary::-webkit-details-marker { display: none; }
+  details.settings { position: relative; }
+  details.settings .box { position: absolute; inset-inline-end: 0; z-index: 5; margin-top: 6px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 6px; width: 260px; max-width: calc(100vw - 32px); }
+  details.settings input { padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; max-width: 1180px; margin: 0 auto; padding: 16px; }
+  @media (max-width: 880px) { main { grid-template-columns: minmax(0, 1fr); } }
+  section.chat, aside { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; min-height: 0; }
+  #log { flex: 1; min-height: 340px; max-height: 62vh; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { display: flex; flex-direction: column; gap: 6px; max-width: 92%; }
+  .msg.user { align-self: flex-end; }
+  .msg.assistant, .msg.system { align-self: flex-start; }
+  .bubble { margin: 0; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--line); }
+  .user .bubble { background: var(--user); border-color: transparent; }
+  .system .bubble { background: transparent; border-style: dashed; color: var(--muted); font-size: .92rem; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .82rem; color: var(--muted); }
+  .chip { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem; direction: ltr; unicode-bidi: isolate; }
+  .chip.write { color: var(--write); border-color: var(--write); }
+  .notice { padding: 8px 12px; border-radius: 8px; font-size: .9rem; }
+  .notice.bad { background: var(--bad-bg); color: var(--bad-ink); }
+  .notice.warn { background: var(--warn-bg); color: var(--warn-ink); }
+  .typing { color: var(--muted); font-style: italic; }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 8px; }
+  .examples .btn { font-size: .85rem; min-height: 34px; }
+  form.send { display: flex; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--line); align-items: flex-end; }
+  textarea { flex: 1; resize: vertical; min-height: 48px; max-height: 160px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  aside h2 { margin: 0; padding: 14px 16px 4px; font-size: 1.05rem; }
+  aside .hint { margin: 0; padding: 0 16px 8px; color: var(--muted); font-size: .85rem; }
+  #pending { padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .empty { color: var(--muted); font-size: .92rem; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--bg); display: grid; gap: 8px; }
+  .card.is-pending { border-color: var(--write); }
+  .card h3 { margin: 0; font-size: .98rem; display: flex; justify-content: space-between; gap: 8px; }
+  .card dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: .88rem; }
+  .card dt { color: var(--muted); }
+  .card dd { margin: 0; overflow-wrap: anywhere; direction: ltr; unicode-bidi: plaintext; text-align: start; }
+  .card .actions { display: flex; gap: 8px; }
+  .card .actions .btn { flex: 1; }
+  .badge { padding: 1px 9px; border-radius: 999px; font-size: .78rem; font-weight: 600; }
+  .badge.pending { background: var(--warn-bg); color: var(--warn-ink); }
+  .badge.approved { background: var(--good-bg); color: var(--good-ink); }
+  .badge.rejected, .badge.failed, .badge.blocked, .badge.expired { background: var(--bad-bg); color: var(--bad-ink); }
+  .result { font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rafeeq · رفيق</h1>
+  <span class="sub" id="subtitle"></span>
+  <span class="spacer"></span>
+  <button class="btn" id="langBtn" type="button" aria-label="Language"></button>
+  <button class="btn" id="newBtn" type="button"></button>
+  <details class="settings">
+    <summary class="btn" id="settingsLabel"></summary>
+    <div class="box">
+      <label for="apiKey" id="keyLabel"></label>
+      <input id="apiKey" type="password" autocomplete="off" spellcheck="false">
+    </div>
+  </details>
+</header>
+
+<main>
+  <section class="chat" aria-label="Chat">
+    <div id="log" role="log" aria-live="polite"></div>
+    <div class="examples" id="examples"></div>
+    <form class="send" id="form">
+      <textarea id="input" dir="auto" rows="2" required maxlength="4000" aria-label="Message"></textarea>
+      <button class="btn primary" id="sendBtn" type="submit"></button>
+    </form>
+  </section>
+  <aside aria-label="Approvals">
+    <h2 id="pendingTitle"></h2>
+    <p class="hint" id="pendingHint"></p>
+    <div id="pending"></div>
+  </aside>
+</main>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- text (English / Arabic)
+const T = {
+  en: {
+    sub: "Madar Municipal Services assistant", lang: "العربية", newChat: "New conversation", settings: "Settings",
+    key: "API key", placeholder: "Ask about a permit, a fee or an inspection…", send: "Send", working: "Rafeeq is working…",
+    toolsUsed: "Tools used", noTools: "No tools used", steps: n => (n === 1 ? "step" : "steps"), tokens: "tokens", blocked: "Blocked by the safety guard",
+    waiting: n => `${n} action${n > 1 ? "s" : ""} waiting for approval. Review ${n > 1 ? "them" : "it"} below.`,
+    pendingTitle: "Pending approvals", pendingHint: "Rafeeq never changes records by itself. A person approves or rejects each action. In this demo the same key reviews and chats.",
+    none: "Nothing is waiting for approval.", approve: "Approve", reject: "Reject", rejectReason: "Reason for rejecting (optional)",
+    status: { pending: "pending", approved: "approved", rejected: "rejected", failed: "failed", blocked: "blocked", expired: "expired" },
+    approvedLine: c => `Approved: ${c}`, rejectedLine: c => `Rejected: ${c}`, failedLine: (c, e) => `Approved but it failed: ${c} (${e})`, blockedLine: c => `Blocked: ${c}`,
+    writeTip: "Write tool: needs human approval", errAuth: "The API key was not accepted. Check Settings.", errBudget: "This conversation used its token budget. Start a new conversation.",
+    errGeneric: "Something went wrong", fields: { permit_id: "Permit", slot: "Slot", inspection_id: "Inspection", new_slot: "New slot", reason: "Reason", note: "Note", to: "To", subject: "Subject", body: "Body", mobile: "Mobile", national_id_last4: "ID (last 4)" },
+    tools: { book_inspection: "Book inspection", reschedule_inspection: "Reschedule inspection", create_refund: "Create refund request", escalate: "Escalate overdue application", send_email: "Send email" },
+    examples: [
+      ["Fee for a lit sign", "What is the fee for an illuminated 3 m² sign?"],
+      ["رسوم البناء", "كم رسوم رخصة البناء لفيلا مساحتها 420 متر مربع؟"],
+      ["Book an inspection", "My food truck permit FTR-30311 is approved. Please book my health inspection on Thursday 5 November at 10:00. I confirm, go ahead. National ID ends 6654, mobile 0532236654."],
+      ["طلب استرداد", "طلب اللوحة SGN-40220 انرفض، وأبغى أسترجع الرسوم. أؤكد لك الطلب فاعتمده. آخر أرقام الهوية 0093 والجوال 0540410093."],
+    ],
+  },
+  ar: {
+    sub: "مساعد خدمات مدار البلدية", lang: "English", newChat: "محادثة جديدة", settings: "الإعدادات",
+    key: "مفتاح الواجهة", placeholder: "اسأل عن رخصة أو رسوم أو فحص…", send: "إرسال", working: "رفيق يعمل على طلبك…",
+    toolsUsed: "الأدوات المستخدمة", noTools: "لم تُستخدم أدوات", steps: n => (n === 1 ? "خطوة" : "خطوات"), tokens: "رموز", blocked: "حجبه حاجز الأمان",
+    waiting: n => (n === 1 ? "إجراء واحد بانتظار الموافقة. راجعه أدناه." : `${n} إجراءات بانتظار الموافقة. راجعها أدناه.`),
+    pendingTitle: "الموافقات المعلّقة", pendingHint: "رفيق لا يغيّر السجلات بنفسه. يوافق شخص على كل إجراء أو يرفضه. في هذا العرض يُستخدم المفتاح نفسه للمحادثة والمراجعة.",
+    none: "لا يوجد ما ينتظر الموافقة.", approve: "موافقة", reject: "رفض", rejectReason: "سبب الرفض (اختياري)",
+    status: { pending: "معلّق", approved: "تمت الموافقة", rejected: "مرفوض", failed: "فشل", blocked: "محجوب", expired: "منتهي" },
+    approvedLine: c => `تمت الموافقة: ${c}`, rejectedLine: c => `تم الرفض: ${c}`, failedLine: (c, e) => `تمت الموافقة لكن التنفيذ فشل: ${c} (${e})`, blockedLine: c => `محجوب: ${c}`,
+    writeTip: "أداة كتابة: تحتاج موافقة بشرية", errAuth: "لم يُقبل مفتاح الواجهة. تحقق من الإعدادات.", errBudget: "استُهلكت حصة هذه المحادثة. ابدأ محادثة جديدة.",
+    errGeneric: "حدث خطأ", fields: { permit_id: "الرخصة", slot: "الموعد", inspection_id: "الفحص", new_slot: "الموعد الجديد", reason: "السبب", note: "ملاحظة", to: "إلى", subject: "الموضوع", body: "النص", mobile: "الجوال", national_id_last4: "الهوية (آخر 4)" },
+    tools: { book_inspection: "حجز فحص", reschedule_inspection: "تغيير موعد فحص", create_refund: "طلب استرداد", escalate: "تصعيد طلب متأخر", send_email: "إرسال بريد" },
+    examples: [
+      ["رسوم لوحة مضيئة", "كم رسوم لوحة مضيئة مساحتها 3 أمتار مربعة؟"],
+      ["Fee for a villa", "How much is the building permit for a 420 m² villa?"],
+      ["حجز فحص", "تصريح عربة الطعام FTR-30311 معتمد. أبغى أحجز فحص صحي يوم الخميس 5 نوفمبر الساعة 10:00. أؤكد الحجز. آخر أرقام الهوية 6654 والجوال 0532236654."],
+      ["Refund request", "My sign permit SGN-40388 was charged twice. Please refund the duplicate payment, I confirm. ID ends 2277, mobile 0505502277."],
+    ],
+  },
+};
+const WRITE_TOOLS = new Set(["book_inspection", "reschedule_inspection", "create_refund", "escalate", "send_email"]);
+
+// ---------------------------------------------------------------- state (storage can be blocked: never rely on it)
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+};
+const newSessionId = () => "s-" + Math.random().toString(36).slice(2, 10);
+let lang = store.get("lang", /^ar/i.test(navigator.language) ? "ar" : "en");
+let apiKey = store.get("key", "dev-key-1");
+let session = store.get("session", "") || newSessionId();
+store.set("session", session);
+let busy = false;
+
+const $ = s => document.querySelector(s);
+const t = () => T[lang];
+
+// ---------------------------------------------------------------- helpers
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null) e.append(kid);
+  return e;
+}
+
+// model and tool text is untrusted: it is only ever inserted as text nodes, never as HTML
+function richText(target, text) {
+  for (const part of String(text).split(/(\*\*[^*\n]+\*\*)/)) {
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) target.append(el("strong", { text: part.slice(2, -2) }));
+    else target.append(document.createTextNode(part));
+  }
+}
+
+async function api(path, options = {}) {
+  let res;
+  try {
+    res = await fetch(path, { ...options, headers: { "Content-Type": "application/json", "X-API-Key": apiKey, ...(options.headers || {}) } });
+  } catch { throw Object.assign(new Error(t().errGeneric), { status: 0 }); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = res.status === 401 || res.status === 403 ? t().errAuth : res.status === 429 ? t().errBudget : (typeof data.detail === "string" ? data.detail : t().errGeneric);
+    throw Object.assign(new Error(msg), { status: res.status });
+  }
+  return data;
+}
+
+const toolTitle = name => t().tools[name] || name;
+function summarize(p) {
+  const r = p.result || {};
+  const facts = Object.entries(r).filter(([, v]) => typeof v !== "object").map(([k, v]) => `${k}: ${v}`).join(" · ");
+  return facts || "";
+}
+
+// ---------------------------------------------------------------- pending cards (shown under the reply and in the side panel)
+function pendingCard(p) {
+  const fields = t().fields;
+  const rows = Object.entries(p.args).flatMap(([k, v]) => [el("dt", { text: fields[k] || k }), el("dd", { text: String(v) })]);
+  const card = el("div", { class: "card is-" + p.status, "data-id": p.id },
+    el("h3", {}, el("span", { text: `${toolTitle(p.tool)}  #${p.id}` }), el("span", { class: "badge " + p.status, text: t().status[p.status] || p.status })),
+    el("dl", {}, rows));
+  if (p.status === "pending") {
+    const ok = el("button", { class: "btn primary", type: "button", text: t().approve });
+    const no = el("button", { class: "btn danger", type: "button", text: t().reject });
+    ok.onclick = () => decide(p, "approve", card);
+    no.onclick = () => decide(p, "reject", card);
+    card.append(el("div", { class: "actions" }, ok, no));
+  } else {
+    const line = (p.result && p.result.error) || summarize(p);
+    if (line) card.append(el("div", { class: "result", dir: "auto", text: line }));
+  }
+  return card;
+}
+
+function refreshCards(p) {
+  document.querySelectorAll(`.card[data-id="${p.id}"]`).forEach(old => old.replaceWith(pendingCard(p)));
+}
+
+async function decide(p, decision, card) {
+  const buttons = card.querySelectorAll("button");
+  buttons.forEach(b => (b.disabled = true));
+  let reason = "";
+  if (decision === "reject") reason = window.prompt(t().rejectReason) || "";
+  try {
+    const done = await api(`/v1/pending/${p.id}/decide`, { method: "POST", body: JSON.stringify({ decision, reason }) });
+    refreshCards(done);
+    const c = `${toolTitle(done.tool)} #${done.id}`;
+    const line = done.status === "approved" ? t().approvedLine(c + " · " + summarize(done))
+      : done.status === "rejected" ? t().rejectedLine(c)
+      : done.status === "blocked" ? t().blockedLine(c)
+      : t().failedLine(c, (done.result && done.result.error) || "");
+    addSystem(line);
+  } catch (e) {
+    addSystem(e.message);
+    buttons.forEach(b => (b.disabled = false));
+  }
+  loadPending();
+}
+
+async function loadPending() {
+  try {
+    const list = await api("/v1/pending");
+    const box = $("#pending");
+    box.replaceChildren(...(list.length ? list.map(pendingCard) : [el("div", { class: "empty", text: t().none })]));
+  } catch (e) { /* the panel stays as it was; chat shows auth errors */ }
+}
+
+// ---------------------------------------------------------------- chat log
+const log = $("#log");
+function scrollDown() { log.scrollTop = log.scrollHeight; }
+
+function addUser(text) {
+  log.append(el("div", { class: "msg user" }, el("p", { class: "bubble", dir: "auto", text })));
+  scrollDown();
+}
+function addSystem(text) {
+  log.append(el("div", { class: "msg system" }, el("p", { class: "bubble", dir: "auto", text })));
+  scrollDown();
+}
+
+function addAssistant(r) {
+  const bubble = el("p", { class: "bubble", dir: "auto" });
+  richText(bubble, r.reply);
+  const msg = el("div", { class: "msg assistant" }, bubble);
+
+  const counts = new Map();
+  r.tools.forEach(n => counts.set(n, (counts.get(n) || 0) + 1));
+  const chips = [...counts].map(([n, c]) => el("span", { class: "chip" + (WRITE_TOOLS.has(n) ? " write" : ""), title: WRITE_TOOLS.has(n) ? t().writeTip : n, text: c > 1 ? `${n} ×${c}` : n }));
+  msg.append(el("div", { class: "meta" },
+    el("span", { text: counts.size ? t().toolsUsed + ":" : t().noTools }), chips,
+    el("span", { text: `· ${r.model_steps} ${t().steps(r.model_steps)} · ${r.tokens.input + r.tokens.output} ${t().tokens}` })));
+
+  for (const b of r.blocked) msg.append(el("div", { class: "notice bad", dir: "auto", text: `${t().blocked}: ${b.reason}` }));
+  if (r.pending_actions.length) {
+    msg.append(el("div", { class: "notice warn", dir: "auto", text: t().waiting(r.pending_actions.length) }));
+    r.pending_actions.forEach(p => msg.append(pendingCard(p)));
+  }
+  log.append(msg);
+  scrollDown();
+}
+
+async function send(text) {
+  if (busy || !text.trim()) return;
+  busy = true;
+  $("#sendBtn").disabled = true;
+  addUser(text);
+  const wait = el("div", { class: "msg assistant" }, el("p", { class: "bubble typing", text: t().working }));
+  log.append(wait);
+  scrollDown();
+  try {
+    addAssistant(await api("/v1/chat", { method: "POST", body: JSON.stringify({ session_id: session, message: text }) }));
+  } catch (e) {
+    addSystem(e.message);
+  } finally {
+    wait.remove();
+    busy = false;
+    $("#sendBtn").disabled = false;
+    $("#input").focus();
+    loadPending();
+  }
+}
+
+// ---------------------------------------------------------------- page text, language, events
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+  const s = t();
+  $("#subtitle").textContent = s.sub;
+  $("#langBtn").textContent = s.lang;
+  $("#newBtn").textContent = s.newChat;
+  $("#settingsLabel").textContent = s.settings;
+  $("#keyLabel").textContent = s.key;
+  $("#input").placeholder = s.placeholder;
+  $("#sendBtn").textContent = s.send;
+  $("#pendingTitle").textContent = s.pendingTitle;
+  $("#pendingHint").textContent = s.pendingHint;
+  $("#examples").replaceChildren(...s.examples.map(([label, text]) => {
+    const b = el("button", { class: "btn", type: "button", text: label, dir: "auto" });
+    b.onclick = () => { $("#input").value = text; $("#input").focus(); };
+    return b;
+  }));
+  loadPending();
+}
+
+$("#langBtn").onclick = () => { lang = lang === "en" ? "ar" : "en"; store.set("lang", lang); applyLang(); };
+$("#newBtn").onclick = () => { session = newSessionId(); store.set("session", session); log.replaceChildren(); $("#input").focus(); };
+document.addEventListener("click", e => { const d = document.querySelector("details.settings"); if (d && !d.contains(e.target)) d.open = false; });
+$("#apiKey").value = apiKey;
+$("#apiKey").onchange = e => { apiKey = e.target.value.trim(); store.set("key", apiKey); loadPending(); };
+$("#form").onsubmit = e => { e.preventDefault(); const v = $("#input").value; $("#input").value = ""; send(v); };
+$("#input").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#form").requestSubmit(); } };
+setInterval(() => { if (!document.hidden) loadPending(); }, 10000);
+applyLang();
+</script>
+</body>
+</html>
