@@ -5,7 +5,7 @@
 **Course:** [SDAIA Academy · Agentic AI Systems Engineering](https://sdaiaacademy.github.io/agentic-ai/)
 **Track:** 1 · Rafeeq in production
 **Team:** Jumanah Almajnouni
-**Model(s):** `google/gemma-4-31b-it:free` via OpenRouter. This is the course default for free tool-calling models. I did not benchmark other models, so the choice rests only on the eval below, where it completes the multi-step tasks.
+**Model(s):** `google/gemma-4-31b-it:free` via OpenRouter. This is the course default for free tool-calling models. 
 
 ## Problem
 
